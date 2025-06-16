@@ -80,7 +80,6 @@ while True:
                 trajectories[match_id] = []
             trajectories[match_id].append(centro)
 
-        # Dibujar bounding box y texto
         color_rect = (0, 255, 0) if match_id != -1 else (0, 0, 255)
         cv2.rectangle(frame, (x1, y1), (x2, y2), color_rect, 2)
         cv2.putText(frame, f"ID: {match_id}", (x1, y1 - 25),
@@ -89,7 +88,6 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
    
-
     cv2.imshow("Cámara 2 - Tracking Mejorado", frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break

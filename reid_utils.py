@@ -1,5 +1,3 @@
-# reid_utils.py
-
 import torch
 import pickle
 import cv2
