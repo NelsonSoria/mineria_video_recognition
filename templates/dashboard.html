@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Seguimiento</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f2f2f2; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; background: white; }
+        th, td { padding: 8px 12px; border: 1px solid #ddd; text-align: center; }
+        th { background-color: #4CAF50; color: white; }
+    </style>
+    <script>
+        function loadData() {
+            fetch("/data")
+                .then(response => response.json())
+                .then(json => {
+                    let table = document.getElementById("table-body");
+                    table.innerHTML = "";
+                    for (let row of json.data) {
+                        let tr = document.createElement("tr");
+                        tr.innerHTML = `
+                            <td>${row.camera_id}</td>
+                            <td>${row.person_id}</td>
+                            <td>${row.x}</td>
+                            <td>${row.y}</td>
+                            <td>${row.timestamp}</td>
+                        `;
+                        table.appendChild(tr);
+                    }
+                });
+        }
+
+        setInterval(loadData, 2000);  // Actualizar cada 2 segundos
+        window.onload = loadData;
+    </script>
+</head>
+<body>
+    <h1>Seguimiento en Tiempo Real</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Cámara</th>
+                <th>ID Persona</th>
+                <th>X</th>
+                <th>Y</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+    </table>
+</body>
+</html>

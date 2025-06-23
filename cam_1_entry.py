@@ -12,6 +12,7 @@ reid_model = load_reid_model()
 db = load_database()
 
 # Captura de cámara
+#cap = cv2.VideoCapture(0)
 cap = cv2.VideoCapture(0)
 
 current_max_id = max([p['id'] for p in db], default=0)
@@ -48,9 +49,7 @@ while True:
             match_id = current_max_id
             db.append({'id': match_id, 'embedding': embedding, 'dominant_color': color})
             save_database(db)
-            print(f"[NUEVO] Persona registrada con ID {match_id}, color dominante: {color}")
-        else:
-            print(f"[INFO] Persona ya registrada con ID {match_id}")
+          
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(frame, f"ID: {match_id}", (x1, y1 - 10),

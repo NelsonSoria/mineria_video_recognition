@@ -16,7 +16,7 @@ def load_reid_model():
     model.eval().cuda()
     return model
 
-def get_dominant_color(image, k=3):
+def get_dominant_color(image, k=5):
     """
     Extrae el color dominante del crop (imagen BGR).
     """

@@ -10,8 +10,8 @@ model = YOLO("yolov8n.pt")  # Puedes usar yolov8s.pt para más precisión
 tracker = DeepSort(max_age=30, n_init=3)
 
 # --- Cargar video desde archivo ---
-video_path = "peoplewalking.mp4"  # Reemplaza con tu ruta al video
-cap = cv2.VideoCapture(video_path)
+video_path = "v2.mp4"  # Reemplaza con tu ruta al video
+cap = cv2.VideoCapture(0)
 tracking_log = []
 
 frame_id = 0  # contador de frames

@@ -1,32 +1,31 @@
 import cv2
 import torch
 from ultralytics import YOLO
-from reid_utils import load_reid_model, get_embedding, load_database, is_same_person, get_dominant_color
-import numpy as np
+from deep_sort_realtime.deepsort_tracker import DeepSort
+from reid_utils import load_reid_model, get_embedding, load_database, is_same_person
 from datetime import datetime
+import requests
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"[INFO] Usando dispositivo: {device}")
 
+# Cargar modelos
 yolo = YOLO("yolov8n.pt")
 reid_model = load_reid_model()
 db = load_database()
 
-cap = cv2.VideoCapture(0)  # Cambia por la fuente correcta
+# Inicializar Deep SORT
+tracker = DeepSort(max_age=30, n_init=3)
 
-def color_distance(c1, c2):
-    return np.linalg.norm(np.array(c1) - np.array(c2))
+# Captura de cámara o video
+video_path = "v1.mp4"
+cap = cv2.VideoCapture(0)  # O cambia a tu fuente de cámara
 
-# Para guardar las trayectorias: dict[id] = [(x,y), (x,y), ...]
+# Almacenar trayectorias (por track_id)
 trajectories = {}
 
-# Parámetros
-color_umbral = 50
-embedding_umbral = 0.75
-distancia_espacial_umbral = 100  # píxeles, ajustar según cámara
-
-def distancia_puntos(p1, p2):
-    return np.linalg.norm(np.array(p1) - np.array(p2))
+# URL servidor para enviar datos (opcional)
+SERVER_URL = "http://127.0.0.1:5000/track"
 
 while True:
     ret, frame = cap.read()
@@ -35,60 +34,69 @@ while True:
 
     results = yolo(frame)[0]
 
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    detections = []
+    crops = []
 
+    # Preparar detecciones para Deep SORT (bbox + confidence + clase)
     for box in results.boxes:
         if int(box.cls[0]) != 0:
-            continue
-
+            continue  # Solo personas
         x1, y1, x2, y2 = map(int, box.xyxy[0])
-        crop = frame[y1:y2, x1:x2]
+        conf = float(box.conf[0])
+        bbox = [x1, y1, x2 - x1, y2 - y1]
+        detections.append((bbox, conf, "person"))
+        crops.append(frame[y1:y2, x1:x2])
 
+    # Actualizar tracker con detecciones
+    tracks = tracker.update_tracks(detections, frame=frame)
+
+    for track, crop in zip(tracks, crops):
+        if not track.is_confirmed():
+            continue
+        track_id = track.track_id
+        l, t, r, b = map(int, track.to_ltrb())
+
+        # Extraer embedding con ReID para identificar persona (opcional)
         embedding = get_embedding(reid_model, crop)
-        color = get_dominant_color(crop)
-        centro = ((x1 + x2) // 2, (y1 + y2) // 2)
 
+        # Buscar en base de datos si la persona ya existe
         match_id = None
-        min_score = float('inf')  # Para comparar y elegir mejor match
         for entry in db:
-            if is_same_person(entry['embedding'], embedding, threshold=embedding_umbral):
-                dist_c = color_distance(entry.get('dominant_color', [0, 0, 0]), color)
-                if dist_c > color_umbral:
-                    continue
+            if is_same_person(entry['embedding'], embedding, threshold=0.75):
+                match_id = entry['id']
+                break
 
-                # Ver si la persona está cerca de su última posición (si existe)
-                last_pos = trajectories.get(entry['id'], [])
-                if last_pos:
-                    dist_pos = distancia_puntos(last_pos[-1], centro)
-                    if dist_pos > distancia_espacial_umbral:
-                        continue
-                else:
-                    dist_pos = 0  # sin historial, lo tomamos
+        # Guardar trayectoria
+        cx = int((l + r) / 2)
+        cy = int((t + b) / 2)
+        if match_id not in trajectories:
+            trajectories[match_id] = []
+        trajectories[match_id].append((cx, cy))
 
-                score = dist_c + dist_pos  # una métrica simple a minimizar
+        # Dibujar bbox, ID y trayectoria
+        cv2.rectangle(frame, (l, t), (r, b), (0, 255, 0), 2)
+        cv2.putText(frame, f"ID: {match_id}", (l, t - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-                if score < min_score:
-                    min_score = score
-                    match_id = entry['id']
+        for i in range(1, len(trajectories[match_id])):
+            if trajectories[match_id][i-1] is None or trajectories[match_id][i] is None:
+                continue
+            cv2.line(frame, trajectories[match_id][i-1], trajectories[match_id][i], (255, 0, 0), 2)
 
-        if match_id is None:
-            match_id = -1  # Persona desconocida
+        # Enviar datos al servidor (opcional)
+        data = {
+            "camera_id": "cam_2",
+            "person_id": match_id,
+            "x": cx,
+            "y": cy,
+            "timestamp": datetime.now().isoformat()
+        }
+        try:
+            requests.post(SERVER_URL, json=data, timeout=0.5)
+        except requests.exceptions.RequestException:
+            print(f"[WARN] Falló el envío de ID {match_id}")
 
-        # Guardar posición para dibujo
-        if match_id != -1:
-            if match_id not in trajectories:
-                trajectories[match_id] = []
-            trajectories[match_id].append(centro)
-
-        color_rect = (0, 255, 0) if match_id != -1 else (0, 0, 255)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color_rect, 2)
-        cv2.putText(frame, f"ID: {match_id}", (x1, y1 - 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_rect, 2)
-        cv2.putText(frame, current_time, (x1, y1 - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-   
-    cv2.imshow("Cámara 2 - Tracking Mejorado", frame)
+    cv2.imshow("Camara 2 - Seguimiento con Deep SORT + ReID", frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 

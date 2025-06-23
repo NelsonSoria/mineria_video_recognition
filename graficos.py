@@ -2,12 +2,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 df = pd.read_csv("tracking_data.csv")
-unique_ids = df["track_id"].nunique()
+unique_ids = df["person_id"].nunique()
 print(f"Personas únicas detectadas: {unique_ids}")
 
 
-for pid in df["track_id"].unique():
-    person = df[df["track_id"] == pid]
+for pid in df["person_id"].unique():
+    person = df[df["person_id"] == pid]
     plt.plot(person["x"], person["y"], label=f"ID {pid}")
 
 plt.xlabel("X")
